@@ -3,6 +3,8 @@ import requests
 import feedparser
 import re
 import json
+import time
+from datetime import datetime, timedelta
 from ollama import Client
 
 # خواندن متغیرها
@@ -20,7 +22,6 @@ NEWS_SOURCES = {
 }
 
 def get_posted_history():
-    """خواندن لیست ۱۰ خبر آخر پست شده"""
     try:
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
             return set(json.load(f))
@@ -28,9 +29,8 @@ def get_posted_history():
         return set()
 
 def save_posted_url(url, history_set):
-    """ذخیره لینک جدید در حافظه دائمی"""
     history_set.add(url)
-    history_list = list(history_set) # نگه داشتن تمام اخبار تاریخچه
+    history_list = list(history_set)
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history_list, f)
     print(f"💾 لینک در حافظه ذخیره شد. تعداد کل اخبار ذخیره شده: {len(history_list)}")
@@ -48,8 +48,18 @@ def is_valid_news(title):
     title_lower = title.lower()
     return not any(keyword in title_lower for keyword in junk_keywords)
 
+def is_fresh_news(entry):
+    """بررسی اینکه آیا خبر در ۲۴ ساعت گذشته منتشر شده است"""
+    pub_date_struct = entry.get('published_parsed')
+    if pub_date_struct:
+        pub_date = datetime.fromtimestamp(time.mktime(pub_date_struct))
+        # اگر خبر قدیمی‌تر از ۲۴ ساعت باشد، رد کن
+        if datetime.now() - pub_date > timedelta(hours=24):
+            return False
+    return True
+
 def get_latest_ai_news():
-    print("در حال دریافت اخبار...")
+    print("در حال دریافت اخبار جدید (فقط آخرین ۲۴ ساعت)...")
     posted_urls = get_posted_history()
     if posted_urls:
         print(f"🧠 حافظه ربات: {len(posted_urls)} خبر قبلی به خاطر سپرده شده است.")
@@ -58,20 +68,20 @@ def get_latest_ai_news():
     
     for source, url in NEWS_SOURCES.items():
         feed = feedparser.parse(url)
-        valid_count = 0
         
         for entry in feed.entries:
-            if valid_count >= 3:
-                break
+            # ۱. فیلتر زمان
+            if not is_fresh_news(entry):
+                continue
                 
             title = entry.title
             link = entry.link
             
-            # فیلتر کردن اخبار تکراری (بررسی در لیست ۱۰ تایی)
+            # ۲. فیلتر تکراری
             if link in posted_urls:
-                print(f"⏩ خبر تکراری رد شد: {title}")
                 continue
                 
+            # ۳. فیلتر زباله
             if not is_valid_news(title):
                 continue
                 
@@ -83,9 +93,9 @@ def get_latest_ai_news():
                 "link": link,
                 "summary": summary
             })
-            valid_count += 1
             
-    return all_news[:10]
+    # حداکثر ۱۵ خبر جدید را برای بررسی به AI می‌دهیم
+    return all_news[:15]
 
 def load_prompt():
     try:
@@ -96,7 +106,7 @@ def load_prompt():
         return None
 
 def generate_engaging_post(news_list):
-    print(f"در حال تحلیل {len(news_list)} خبر معتبر توسط هوش مصنوعی...")
+    print(f"در حال تحلیل {len(news_list)} خبر تازه و معتبر توسط هوش مصنوعی...")
     
     news_data = ""
     for i, news in enumerate(news_list, 1):
@@ -156,4 +166,4 @@ if __name__ == "__main__":
         else:
             print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
     else:
-        print("🔴 هیچ خبر جدیدی یافت نشد (همه تکراری هستند). ربات کانال رو آپدیت نمی‌کنه.")
+        print("🔴 هیچ خبر تازه‌ای در ۲۴ ساعت گذشته یافت نشد. ربات کانال را آپدیت نمی‌کند.")
