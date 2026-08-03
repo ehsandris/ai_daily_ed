@@ -165,14 +165,12 @@ def generate_engaging_post(news_list):
 
 def send_to_telegram(text):
     print("در حال ارسال به تلگرام...")
-    # beautify the links before sending
-    beautiful_text = beautify_links(text)
-    
+    # متن از قبل در تابع format_post_for_telegram فرمت شده است
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_ID,
-        "text": beautiful_text,
-        "parse_mode": "HTML", # پشتیبانی از تگ‌های HTML
+        "text": text, # <--- مستقیم خود text را می‌فرستیم
+        "parse_mode": "HTML",
         "disable_web_page_preview": False
     }
     try:
