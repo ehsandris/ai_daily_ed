@@ -20,22 +20,23 @@ NEWS_SOURCES = {
 }
 
 def get_last_posted_url():
-    """خواندن آخرین لینکی که پست شده از فایل کش"""
     try:
         with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-            return f.read().strip()
+            url = f.read().strip()
+            print(f"🔍 لینک خوانده شده از حافظه: {url}")
+            return url
     except FileNotFoundError:
+        print("🔍 حافظه‌ای یافت نشد (اولین اجرا).")
         return None
 
 def save_last_posted_url(url):
-    """ذخیره لینک پست جدید در فایل کش"""
+    print(f"💾 در حال ذخیره لینک در حافظه: {url}")
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         f.write(url)
 
 def extract_url_from_text(text):
-    """استخراج لینک از متن نهایی که هوش مصنوعی ساخته"""
     urls = re.findall(r'(https?://[^\s]+)', text)
-    return urls[-1] if urls else None # آخرین لینک معمولا لینک منبع است
+    return urls[-1] if urls else None
 
 def clean_html(text):
     clean = re.compile('<.*?>')
@@ -49,8 +50,6 @@ def is_valid_news(title):
 def get_latest_ai_news():
     print("در حال دریافت اخبار و بررسی حافظه برای جلوگیری از تکرار...")
     last_url = get_last_posted_url()
-    if last_url:
-        print(f"🔗 آخرین پست ذخیره شده: {last_url}")
         
     all_news = []
     
@@ -65,7 +64,7 @@ def get_latest_ai_news():
             title = entry.title
             link = entry.link
             
-            # 👈 فیلتر کردن خبر تکراری
+            # فیلتر کردن خبر تکراری
             if link == last_url:
                 print(f"⏩ خبر تکراری رد شد: {title}")
                 continue
@@ -148,11 +147,9 @@ if __name__ == "__main__":
         post_text = generate_engaging_post(news_list)
         if post_text and "SKIP" not in post_text.upper():
             if send_to_telegram(post_text):
-                # ذخیره لینک پست جدید در حافظه
                 posted_url = extract_url_from_text(post_text)
                 if posted_url:
                     save_last_posted_url(posted_url)
-                    print("💾 لینک پست جدید در حافظه ذخیره شد تا تکرار نشود.")
         else:
             print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
     else:
