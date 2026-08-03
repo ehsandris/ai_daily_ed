@@ -13,6 +13,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
+      - name: Setup Cache (حافظه ربات)
+        uses: actions/cache@v4
+        with:
+          path: last_post.txt
+          key: last-posted-news-url
+          
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
