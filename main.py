@@ -57,12 +57,13 @@ def extract_url_from_text(text):
     return urls[-1] if urls else None
 
 def beautify_links(text):
-    """تبدیل لینک خام به لینک کلیک‌خور زیبا"""
-    urls = re.findall(r'(https?://[^\s]+)', text)
+    """تبدیل لینک خام به لینک کلیک‌خور HTML (برای جلوگیری از ارور)"""
+    urls = re.findall(r'(https?://[^\s<]+)', text)
     if urls:
-        # آخرین لینک (لینک منبع) را به یک دکمه متنی تبدیل می‌کنیم
-        last_url = urls[-1].replace(")", "")
-        text = text.replace(last_url, f"[📚 منبع خبر]({last_url})")
+        last_url = urls[-1]
+        # اگر هوش مصنوعی لینک را در تگ a نگذاشته بود، خودمان می‌گذاریم
+        if f'href="{last_url}' not in text:
+            text = text.replace(last_url, f'<a href="{last_url}">📚 منبع خبر</a>')
     return text
 
 def clean_html(text):
@@ -160,7 +161,7 @@ def send_to_telegram(text):
     payload = {
         "chat_id": CHANNEL_ID,
         "text": beautiful_text,
-        "parse_mode": "Markdown", # تغییر به مارک‌داون برای پشتیبانی از لینک مخفی
+        "parse_mode": "HTML", # پشتیبانی از تگ‌های HTML
         "disable_web_page_preview": False
     }
     try:
