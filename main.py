@@ -55,28 +55,25 @@ def save_posted_url(url, history_set):
 def extract_url_from_text(text):
     urls = re.findall(r'(https?://[^\s]+)', text)
     return urls[-1] if urls else None
-
+    
 def format_post_for_telegram(text, available_links):
-    """پاک‌سازی متن، بولد کردن تیتر و اضافه کردن دقیق لینک HTML"""
+    """پاک‌سازی متن، بولد کردن خط اول و اضافه کردن دقیق لینک HTML"""
     
     chosen_link = None
+    text = text.strip()
     
-    # پیدا کردن لینکی که هوش مصنوعی انتخاب کرده (در بخش SOURCE_URL)
-    url_match = re.search(r'SOURCE_URL:\s*(https?://[^\s<]+)', text)
-    if url_match:
-        chosen_link = url_match.group(1)
-        # حذف خط SOURCE_URL از متن
-        text = re.sub(r'SOURCE_URL:\s*https?://[^\s<]+', '', text).strip()
-    
-    # اگر هوش مصنوعی لینک را در جاهای دیگر متن هم نوشته بود، همه را پاک می‌کنیم
+    # پیدا کردن لینکی که هوش مصنوعی ممکن است در متن گذاشته باشد
     for link in available_links:
-        text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
-        text = text.replace(link, '')
+        if link in text:
+            chosen_link = link # یادمان باشد کدام لینک را انتخاب کرده
+            # حذف لینک از متن
+            text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
+            text = text.replace(link, '')
     
     # پاکسازی پرانتزها و کروشه‌های خالی
     text = text.replace('[]', '').replace('()', '').strip()
     
-    # جدا کردن تیتر (خط اول) برای بولد کردن
+    # جدا کردن خط اول (تیتر) برای بولد کردن
     lines = text.split('\n')
     if len(lines) > 1:
         title = lines[0].strip()
@@ -84,6 +81,10 @@ def format_post_for_telegram(text, available_links):
         # بولد کردن تیتر با HTML
         text = f"<b>{title}</b>\n\n{rest_of_text}"
     
+    # اگر هوش مصنوعی هیچ لینکی در متن نگذاشته بود، اولین لینک لیست را به عنوان منبع می‌گذاریم
+    if not chosen_link and available_links:
+        chosen_link = available_links[0]
+        
     # اضافه کردن لینک استاندارد HTML به انتهای متن
     if chosen_link:
         text += f'\n\n<a href="{chosen_link}">📚 منبع خبر</a>'
