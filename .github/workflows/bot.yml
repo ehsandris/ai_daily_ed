@@ -17,7 +17,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: last_post.txt
-          key: last-posted-news-url
+          # استفاده از شناسه یکتا برای ذخیره فایل جدید در هر اجرا
+          key: last-posted-news-url-${{ github.run_id }}
+          # خواندن آخرین فایل ذخیره شده (حتی اگر شناسه فرق داشت)
+          restore-keys: |
+            last-posted-news-url-
           
       - name: Set up Python
         uses: actions/setup-python@v5
