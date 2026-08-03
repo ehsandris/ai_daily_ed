@@ -33,7 +33,7 @@ def translate_to_persian(title, link):
     try:
         # تنظیم کلاینت اولاما برای اتصال به کلاد
         client = Client(
-            host='https://ollama.com/api',
+            host='https://ollama.com',
             headers={'Authorization': f'Bearer {AI_API_KEY}'}
         )
         
