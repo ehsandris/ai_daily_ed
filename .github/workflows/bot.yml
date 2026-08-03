@@ -19,11 +19,10 @@ jobs:
           python-version: '3.11'
           
       - name: Install dependencies
-        run: pip install requests feedparser
+        run: pip install requests feedparser ollama
         
       - name: Run Bot
         run: python main.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
