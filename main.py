@@ -9,8 +9,9 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
+CACHE_FILE = 'last_post.txt'
 
-# لیست منابع خبری معتبر و گسترده‌تر
+# لیست منابع خبری
 NEWS_SOURCES = {
     "TechCrunch": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
@@ -18,19 +19,39 @@ NEWS_SOURCES = {
     "Wired": "https://www.wired.com/feed/tag/ai/latest/rss"
 }
 
+def get_last_posted_url():
+    """خواندن آخرین لینکی که پست شده از فایل کش"""
+    try:
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+def save_last_posted_url(url):
+    """ذخیره لینک پست جدید در فایل کش"""
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        f.write(url)
+
+def extract_url_from_text(text):
+    """استخراج لینک از متن نهایی که هوش مصنوعی ساخته"""
+    urls = re.findall(r'(https?://[^\s]+)', text)
+    return urls[-1] if urls else None # آخرین لینک معمولا لینک منبع است
+
 def clean_html(text):
-    """حذف تگ‌های HTML از خلاصه خبر"""
     clean = re.compile('<.*?>')
     return re.sub(clean, '', text).strip()
 
 def is_valid_news(title):
-    """فیلتر کردن اخارات بی‌ارزش مثل پادکست یا خبرنامه"""
     junk_keywords = ['podcast', 'newsletter', 'sponsored', 'giveaway', 'best of', 'deals']
     title_lower = title.lower()
     return not any(keyword in title_lower for keyword in junk_keywords)
 
 def get_latest_ai_news():
-    print("در حال دریافت و فیلتر اخبار از منابع مختلف...")
+    print("در حال دریافت اخبار و بررسی حافظه برای جلوگیری از تکرار...")
+    last_url = get_last_posted_url()
+    if last_url:
+        print(f"🔗 آخرین پست ذخیره شده: {last_url}")
+        
     all_news = []
     
     for source, url in NEWS_SOURCES.items():
@@ -38,29 +59,33 @@ def get_latest_ai_news():
         valid_count = 0
         
         for entry in feed.entries:
-            if valid_count >= 3: # ۳ خبر معتبر از هر سایت
+            if valid_count >= 3:
                 break
                 
             title = entry.title
+            link = entry.link
+            
+            # 👈 فیلتر کردن خبر تکراری
+            if link == last_url:
+                print(f"⏩ خبر تکراری رد شد: {title}")
+                continue
+                
             if not is_valid_news(title):
-                continue # رد کردن اخبار بی‌ارزش
+                continue
                 
             summary = clean_html(entry.summary)[:600] if hasattr(entry, 'summary') else "خلاصه موجود نیست"
-            published = entry.get('published', 'تاریخ نامشخص')
             
             all_news.append({
                 "source": source,
                 "title": title,
-                "link": entry.link,
-                "summary": summary,
-                "date": published
+                "link": link,
+                "summary": summary
             })
             valid_count += 1
             
-    return all_news[:10] # بررسی ۱۰ خبر معتبر برتر
+    return all_news[:10]
 
 def load_prompt():
-    """خواندن فایل پرامپت از خارج کد"""
     try:
         with open('prompt.txt', 'r', encoding='utf-8') as file:
             return file.read()
@@ -71,12 +96,10 @@ def load_prompt():
 def generate_engaging_post(news_list):
     print(f"در حال تحلیل {len(news_list)} خبر معتبر توسط هوش مصنوعی...")
     
-    # ساخت لیست خام اخبار شامل تاریخ و منبع
     news_data = ""
     for i, news in enumerate(news_list, 1):
         news_data += f"خبر {i}:\nعنوان: {news['title']}\nخلاصه: {news['summary']}\nلینک: {news['link']}\n---\n"
     
-    # خواندن پرامپت و جایگذاری اخبار
     prompt_template = load_prompt()
     if not prompt_template:
         return None
@@ -88,12 +111,10 @@ def generate_engaging_post(news_list):
             host='https://ollama.com',
             headers={'Authorization': f'Bearer {AI_API_KEY}'}
         )
-        
         response = client.chat(
             model=AI_MODEL,
             messages=[{'role': 'user', 'content': final_prompt}]
         )
-        
         return response['message']['content']
         
     except Exception as e:
@@ -113,18 +134,26 @@ def send_to_telegram(text):
         response = requests.post(url, data=payload, timeout=15)
         if response.status_code == 200:
             print("✅ پست حرفه‌ای با موفقیت ارسال شد!")
+            return True
         else:
             print(f"❌ خطا در ارسال تلگرام: {response.text}")
+            return False
     except Exception as e:
         print(f"❌ خطای شبکه تلگرام: {e}")
+        return False
 
 if __name__ == "__main__":
     news_list = get_latest_ai_news()
     if news_list:
         post_text = generate_engaging_post(news_list)
         if post_text and "SKIP" not in post_text.upper():
-            send_to_telegram(post_text)
+            if send_to_telegram(post_text):
+                # ذخیره لینک پست جدید در حافظه
+                posted_url = extract_url_from_text(post_text)
+                if posted_url:
+                    save_last_posted_url(posted_url)
+                    print("💾 لینک پست جدید در حافظه ذخیره شد تا تکرار نشود.")
         else:
-            print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد تا کیفیت کانال حفظ شود.")
+            print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
     else:
-        print("هیچ خبری یافت نشد.")
+        print("هیچ خبر جدیدی یافت نشد (احتمالا همه تکراری هستند).")
