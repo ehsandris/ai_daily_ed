@@ -25,7 +25,8 @@ If you find a significant news item, rewrite it for the Telegram channel.
 
 3. Formatting & Links:
    - Use NO markdown (no *, _, etc.) and NO HTML tags. Just plain text.
-   - DO NOT include any URLs in your output. The system will add the source link automatically.
+   - DO NOT include any URLs in your output.
+   - AT THE VERY END of your text, on a new line, write exactly "NEWS_ID: X" where X is the number of the news item you chose (e.g., NEWS_ID: 3).
 </rules>
 
 <news_data>
