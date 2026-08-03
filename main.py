@@ -10,11 +10,12 @@ CHANNEL_ID = os.environ.get("CHANNEL_ID")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
 
-# لیست منابع خبری معتبر
+# لیست منابع خبری معتبر و گسترده‌تر
 NEWS_SOURCES = {
     "TechCrunch": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-    "VentureBeat": "https://venturebeat.com/category/ai/feed/"
+    "VentureBeat": "https://venturebeat.com/category/ai/feed/",
+    "Wired": "https://www.wired.com/feed/tag/ai/latest/rss"
 }
 
 def clean_html(text):
@@ -22,22 +23,41 @@ def clean_html(text):
     clean = re.compile('<.*?>')
     return re.sub(clean, '', text).strip()
 
+def is_valid_news(title):
+    """فیلتر کردن اخارات بی‌ارزش مثل پادکست یا خبرنامه"""
+    junk_keywords = ['podcast', 'newsletter', 'sponsored', 'giveaway', 'best of', 'deals']
+    title_lower = title.lower()
+    return not any(keyword in title_lower for keyword in junk_keywords)
+
 def get_latest_ai_news():
-    print("در حال دریافت اخبار از منابع مختلف...")
+    print("در حال دریافت و فیلتر اخبار از منابع مختلف...")
     all_news = []
     
     for source, url in NEWS_SOURCES.items():
         feed = feedparser.parse(url)
-        for entry in feed.entries[:2]: # ۲ خبر آخر هر سایت
-            summary = clean_html(entry.summary)[:500]
+        valid_count = 0
+        
+        for entry in feed.entries:
+            if valid_count >= 3: # ۳ خبر معتبر از هر سایت
+                break
+                
+            title = entry.title
+            if not is_valid_news(title):
+                continue # رد کردن اخبار بی‌ارزش
+                
+            summary = clean_html(entry.summary)[:600] if hasattr(entry, 'summary') else "خلاصه موجود نیست"
+            published = entry.get('published', 'تاریخ نامشخص')
+            
             all_news.append({
                 "source": source,
-                "title": entry.title,
+                "title": title,
                 "link": entry.link,
-                "summary": summary
+                "summary": summary,
+                "date": published
             })
+            valid_count += 1
             
-    return all_news[:5] # ۵ خبر اول برای بررسی
+    return all_news[:10] # بررسی ۱۰ خبر معتبر برتر
 
 def load_prompt():
     """خواندن فایل پرامپت از خارج کد"""
@@ -49,9 +69,9 @@ def load_prompt():
         return None
 
 def generate_engaging_post(news_list):
-    print(f"در حال تحلیل {len(news_list)} خبر توسط هوش مصنوعی...")
+    print(f"در حال تحلیل {len(news_list)} خبر معتبر توسط هوش مصنوعی...")
     
-    # ساخت لیست خام اخبار
+    # ساخت لیست خام اخبار شامل تاریخ و منبع
     news_data = ""
     for i, news in enumerate(news_list, 1):
         news_data += f"خبر {i}:\nعنوان: {news['title']}\nخلاصه: {news['summary']}\nلینک: {news['link']}\n---\n"
