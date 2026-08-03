@@ -8,7 +8,6 @@ CHANNEL_ID = os.environ.get("CHANNEL_ID")
 
 def get_latest_ai_news():
     print("در حال دریافت آخرین اخبار از TechCrunch...")
-    # آدرس فید اخبار هوش مصنوعی
     url = "https://techcrunch.com/category/artificial-intelligence/feed/"
     feed = feedparser.parse(url)
     
@@ -16,25 +15,24 @@ def get_latest_ai_news():
         print("❌ هیچ خبری یافت نشد!")
         return None
     
-    # گرفتن جدیدترین خبر (اولین آیتم در لیست)
     latest_news = feed.entries[0]
     return {
         "title": latest_news.title,
-        "link": latest_news.link,
-        "summary": latest_news.summary
+        "link": latest_news.link
     }
 
 def send_to_telegram(text):
+    print("در حال ارسال به تلگرام...")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_ID,
         "text": text,
-        "parse_mode": "HTML" # اجازه فرمت‌بندی متن
+        "parse_mode": "HTML"
     }
     try:
         response = requests.post(url, data=payload, timeout=10)
         if response.status_code == 200:
-            print("✅ خبر با موفقیت در کانال ارسال شد!")
+            print("✅ خبر با موفقیت در کانال تلگرام ارسال شد!")
         else:
             print(f"❌ خطا در ارسال: {response.text}")
     except Exception as e:
@@ -44,6 +42,5 @@ if __name__ == "__main__":
     news = get_latest_ai_news()
     if news:
         print(f"خبر پیدا شد: {news['title']}")
-        # برای الان فقط عنوان و لینک را می‌فرستیم تا تست کنیم
         message = f"🆕 <b>خبر جدید هوش مصنوعی</b>\n\n{news['title']}\n\n🔗 لینک: {news['link']}"
         send_to_telegram(message)
