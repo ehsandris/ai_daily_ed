@@ -2,16 +2,16 @@ import os
 import requests
 import feedparser
 import re
+import json
 from ollama import Client
 
-# خواندن متغیرها از گیت‌هاب
+# خواندن متغیرها
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
-CACHE_FILE = 'last_post.txt'
+HISTORY_FILE = 'posted_history.json'
 
-# لیست منابع خبری
 NEWS_SOURCES = {
     "TechCrunch": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
@@ -19,20 +19,21 @@ NEWS_SOURCES = {
     "Wired": "https://www.wired.com/feed/tag/ai/latest/rss"
 }
 
-def get_last_posted_url():
+def get_posted_history():
+    """خواندن لیست ۱۰ خبر آخر پست شده"""
     try:
-        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-            url = f.read().strip()
-            print(f"🔍 لینک خوانده شده از حافظه: {url}")
-            return url
-    except FileNotFoundError:
-        print("🔍 حافظه‌ای یافت نشد (اولین اجرا).")
-        return None
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            return set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
 
-def save_last_posted_url(url):
-    print(f"💾 در حال ذخیره لینک در حافظه: {url}")
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        f.write(url)
+def save_posted_url(url, history_set):
+    """ذخیره لینک جدید در حافظه دائمی"""
+    history_set.add(url)
+    history_list = list(history_set) # نگه داشتن تمام اخبار تاریخچه
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(history_list, f)
+    print(f"💾 لینک در حافظه ذخیره شد. تعداد کل اخبار ذخیره شده: {len(history_list)}")
 
 def extract_url_from_text(text):
     urls = re.findall(r'(https?://[^\s]+)', text)
@@ -48,8 +49,10 @@ def is_valid_news(title):
     return not any(keyword in title_lower for keyword in junk_keywords)
 
 def get_latest_ai_news():
-    print("در حال دریافت اخبار و بررسی حافظه برای جلوگیری از تکرار...")
-    last_url = get_last_posted_url()
+    print("در حال دریافت اخبار...")
+    posted_urls = get_posted_history()
+    if posted_urls:
+        print(f"🧠 حافظه ربات: {len(posted_urls)} خبر قبلی به خاطر سپرده شده است.")
         
     all_news = []
     
@@ -64,8 +67,8 @@ def get_latest_ai_news():
             title = entry.title
             link = entry.link
             
-            # فیلتر کردن خبر تکراری
-            if link == last_url:
+            # فیلتر کردن اخبار تکراری (بررسی در لیست ۱۰ تایی)
+            if link in posted_urls:
                 print(f"⏩ خبر تکراری رد شد: {title}")
                 continue
                 
@@ -149,8 +152,8 @@ if __name__ == "__main__":
             if send_to_telegram(post_text):
                 posted_url = extract_url_from_text(post_text)
                 if posted_url:
-                    save_last_posted_url(posted_url)
+                    save_posted_url(posted_url, get_posted_history())
         else:
             print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
     else:
-        print("هیچ خبر جدیدی یافت نشد (احتمالا همه تکراری هستند).")
+        print("🔴 هیچ خبر جدیدی یافت نشد (همه تکراری هستند). ربات کانال رو آپدیت نمی‌کنه.")
