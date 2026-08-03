@@ -28,9 +28,8 @@ def get_latest_ai_news():
     
     for source, url in NEWS_SOURCES.items():
         feed = feedparser.parse(url)
-        # گرفتن ۲ خبر آخر هر سایت
-        for entry in feed.entries[:2]:
-            summary = clean_html(entry.summary)[:500] # محدود کردن حجم خلاصه
+        for entry in feed.entries[:2]: # ۲ خبر آخر هر سایت
+            summary = clean_html(entry.summary)[:500]
             all_news.append({
                 "source": source,
                 "title": entry.title,
@@ -38,35 +37,31 @@ def get_latest_ai_news():
                 "summary": summary
             })
             
-    return all_news[:5] # برگرداندن ۵ خبر اول برای بررسی
+    return all_news[:5] # ۵ خبر اول برای بررسی
+
+def load_prompt():
+    """خواندن فایل پرامپت از خارج کد"""
+    try:
+        with open('prompt.txt', 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+        print("❌ فایل prompt.txt پیدا نشد!")
+        return None
 
 def generate_engaging_post(news_list):
     print(f"در حال تحلیل {len(news_list)} خبر توسط هوش مصنوعی...")
     
-    # ساخت لیست خام اخبار برای ارائه به هوش مصنوعی
+    # ساخت لیست خام اخبار
     news_data = ""
     for i, news in enumerate(news_list, 1):
         news_data += f"خبر {i}:\nعنوان: {news['title']}\nخلاصه: {news['summary']}\nلینک: {news['link']}\n---\n"
     
-    prompt = f"""
-    شما یک ویراستار ارشد، تحلیل‌گر و نویسنده خلاق در یک کانال تلگرامی پرطرفدار اخبار فناوری هستید. 
-    هدف شما تولید محتوایی است که مخاطب را میخکوب کند و اصلاً شبیه ربات نباشد.
-
-    لیست جدیدترین اخبار را در زیر دارید:
-    {news_data}
-
-    وظایف شما به ترتیب:
-    1. **انتخاب:** از بین این اخبار، فقط یک خبر را انتخاب کنید که مهم‌ترین، تاثیرگذارترین یا جنجالی‌ترین باشد. (اخبار تکراری، تامین مالی‌های کوچک یا آپدیت‌های ناچیز را رد کنید).
-    2. **روایت‌گری (بدون قالب ثابت):** خبر انتخاب شده را با لحنی کاملاً انسانی، روان و جذاب بازنویسی کنید. 
-       - لحن متن باید با ماهیت خبر همراستا باشد (اگر خبر پیشرفت بزرگی است هیجان‌انگیز، اگر خبر محدودیتی است جدی و هشداردهنده).
-       - اصلاً الکی جو ندهید و غلو نکنید. حقایق را بگویید اما با زیبایی.
-       - از ساختارهای ماشینی (مثل "تیتر: ... خلاصه: ...") استفاده نکنید. متن باید مثل یک پست لاین تلگرامی از یک آدم دنبال‌دار باشد.
-       - حجم متن بین ۳ تا ۵ خط باشد.
-    3. **هشتگ‌گذاری:** در انتهای متن، ۲ الی ۳ هشتگ مرتبط و استاندارد (بدون فاصله) اضافه کنید.
-    4. **منبع:** در خط آخر، لینک خبر انتخاب شده را قرار دهید.
-
-    فقط متن نهایی پست تلگرام را خروجی بدهید، بدون هیچ متن یا توضیح اضافه‌ای قبل و بعد از آن.
-    """
+    # خواندن پرامپت و جایگذاری اخبار
+    prompt_template = load_prompt()
+    if not prompt_template:
+        return None
+        
+    final_prompt = prompt_template.replace("{NEWS_DATA}", news_data)
     
     try:
         client = Client(
@@ -76,7 +71,7 @@ def generate_engaging_post(news_list):
         
         response = client.chat(
             model=AI_MODEL,
-            messages=[{'role': 'user', 'content': prompt}]
+            messages=[{'role': 'user', 'content': final_prompt}]
         )
         
         return response['message']['content']
@@ -107,9 +102,9 @@ if __name__ == "__main__":
     news_list = get_latest_ai_news()
     if news_list:
         post_text = generate_engaging_post(news_list)
-        if post_text:
+        if post_text and "SKIP" not in post_text.upper():
             send_to_telegram(post_text)
         else:
-            print("هوش مصنوعی نتوانست پستی تولید کند.")
+            print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد تا کیفیت کانال حفظ شود.")
     else:
         print("هیچ خبری یافت نشد.")
