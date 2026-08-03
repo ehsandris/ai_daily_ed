@@ -4,12 +4,14 @@ import feedparser
 import re
 import json
 import time
+import traceback
 from datetime import datetime, timedelta
 from ollama import Client
 
 # خواندن متغیرها
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
 HISTORY_FILE = 'posted_history.json'
@@ -20,6 +22,22 @@ NEWS_SOURCES = {
     "VentureBeat": "https://venturebeat.com/category/ai/feed/",
     "Wired": "https://www.wired.com/feed/tag/ai/latest/rss"
 }
+
+def notify_admin(error_text):
+    """ارسال پیام خطا به ادمین"""
+    if not ADMIN_CHAT_ID:
+        return
+    print("📧 در حال ارسال پیام خطا به ادمین...")
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": ADMIN_CHAT_ID,
+        "text": f"🚨 <b>خطا در ربات اخبار هوش مصنوعی</b>\n\n<code>{error_text}</code>",
+        "parse_mode": "HTML"
+    }
+    try:
+        requests.post(url, data=payload, timeout=10)
+    except:
+        pass
 
 def get_posted_history():
     try:
@@ -33,11 +51,19 @@ def save_posted_url(url, history_set):
     history_list = list(history_set)
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history_list, f)
-    print(f"💾 لینک در حافظه ذخیره شد. تعداد کل اخبار ذخیره شده: {len(history_list)}")
 
 def extract_url_from_text(text):
     urls = re.findall(r'(https?://[^\s]+)', text)
     return urls[-1] if urls else None
+
+def beautify_links(text):
+    """تبدیل لینک خام به لینک کلیک‌خور زیبا"""
+    urls = re.findall(r'(https?://[^\s]+)', text)
+    if urls:
+        # آخرین لینک (لینک منبع) را به یک دکمه متنی تبدیل می‌کنیم
+        last_url = urls[-1].replace(")", "")
+        text = text.replace(last_url, f"[📚 منبع خبر]({last_url})")
+    return text
 
 def clean_html(text):
     clean = re.compile('<.*?>')
@@ -49,11 +75,9 @@ def is_valid_news(title):
     return not any(keyword in title_lower for keyword in junk_keywords)
 
 def is_fresh_news(entry):
-    """بررسی اینکه آیا خبر در ۲۴ ساعت گذشته منتشر شده است"""
     pub_date_struct = entry.get('published_parsed')
     if pub_date_struct:
         pub_date = datetime.fromtimestamp(time.mktime(pub_date_struct))
-        # اگر خبر قدیمی‌تر از ۲۴ ساعت باشد، رد کن
         if datetime.now() - pub_date > timedelta(hours=24):
             return False
     return True
@@ -61,8 +85,6 @@ def is_fresh_news(entry):
 def get_latest_ai_news():
     print("در حال دریافت اخبار جدید (فقط آخرین ۲۴ ساعت)...")
     posted_urls = get_posted_history()
-    if posted_urls:
-        print(f"🧠 حافظه ربات: {len(posted_urls)} خبر قبلی به خاطر سپرده شده است.")
         
     all_news = []
     
@@ -70,18 +92,15 @@ def get_latest_ai_news():
         feed = feedparser.parse(url)
         
         for entry in feed.entries:
-            # ۱. فیلتر زمان
             if not is_fresh_news(entry):
                 continue
                 
             title = entry.title
             link = entry.link
             
-            # ۲. فیلتر تکراری
             if link in posted_urls:
                 continue
                 
-            # ۳. فیلتر زباله
             if not is_valid_news(title):
                 continue
                 
@@ -94,7 +113,6 @@ def get_latest_ai_news():
                 "summary": summary
             })
             
-    # حداکثر ۱۵ خبر جدید را برای بررسی به AI می‌دهیم
     return all_news[:15]
 
 def load_prompt():
@@ -102,7 +120,6 @@ def load_prompt():
         with open('prompt.txt', 'r', encoding='utf-8') as file:
             return file.read()
     except FileNotFoundError:
-        print("❌ فایل prompt.txt پیدا نشد!")
         return None
 
 def generate_engaging_post(news_list):
@@ -131,15 +148,19 @@ def generate_engaging_post(news_list):
         
     except Exception as e:
         print(f"❌ خطا در هوش مصنوعی: {e}")
+        notify_admin(f"خطا در اتصال به هوش مصنوعی:\n{e}")
         return None
 
 def send_to_telegram(text):
     print("در حال ارسال به تلگرام...")
+    # beautify the links before sending
+    beautiful_text = beautify_links(text)
+    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_ID,
-        "text": text,
-        "parse_mode": "HTML",
+        "text": beautiful_text,
+        "parse_mode": "Markdown", # تغییر به مارک‌داون برای پشتیبانی از لینک مخفی
         "disable_web_page_preview": False
     }
     try:
@@ -149,21 +170,30 @@ def send_to_telegram(text):
             return True
         else:
             print(f"❌ خطا در ارسال تلگرام: {response.text}")
+            notify_admin(f"خطا در ارسال به کانال:\n{response.text}")
             return False
     except Exception as e:
         print(f"❌ خطای شبکه تلگرام: {e}")
+        notify_admin(f"خطای شبکه تلگرام:\n{e}")
         return False
 
 if __name__ == "__main__":
-    news_list = get_latest_ai_news()
-    if news_list:
-        post_text = generate_engaging_post(news_list)
-        if post_text and "SKIP" not in post_text.upper():
-            if send_to_telegram(post_text):
-                posted_url = extract_url_from_text(post_text)
-                if posted_url:
-                    save_posted_url(posted_url, get_posted_history())
+    try:
+        news_list = get_latest_ai_news()
+        if news_list:
+            post_text = generate_engaging_post(news_list)
+            if post_text and "SKIP" not in post_text.upper():
+                if send_to_telegram(post_text):
+                    posted_url = extract_url_from_text(post_text)
+                    if posted_url:
+                        save_posted_url(posted_url, get_posted_history())
+            else:
+                print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
         else:
-            print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
-    else:
-        print("🔴 هیچ خبر تازه‌ای در ۲۴ ساعت گذشته یافت نشد. ربات کانال را آپدیت نمی‌کند.")
+            print("🔴 هیچ خبر تازه‌ای در ۲۴ ساعت گذشته یافت نشد. ربات کانال را آپدیت نمی‌کند.")
+            
+    except Exception as e:
+        # اگر هر خطای پیش‌بینی نشده‌ای در کل کد رخ داد
+        error_msg = traceback.format_exc()
+        print(f"❌ خطای بحرانی:\n{error_msg}")
+        notify_admin(f"خطای بحرانی در اجرای ربات:\n{error_msg}")
