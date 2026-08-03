@@ -56,14 +56,25 @@ def extract_url_from_text(text):
     urls = re.findall(r'(https?://[^\s]+)', text)
     return urls[-1] if urls else None
 
-def beautify_links(text):
-    """تبدیل لینک خام به لینک کلیک‌خور HTML (برای جلوگیری از ارور)"""
-    urls = re.findall(r'(https?://[^\s<]+)', text)
-    if urls:
-        last_url = urls[-1]
-        # اگر هوش مصنوعی لینک را در تگ a نگذاشته بود، خودمان می‌گذاریم
-        if f'href="{last_url}' not in text:
-            text = text.replace(last_url, f'<a href="{last_url}">📚 منبع خبر</a>')
+def format_post_for_telegram(text, available_links):
+    """پاک‌سازی متن و اضافه کردن دقیق لینک HTML"""
+    
+    # اگر هوش مصنوعی لینک را نوشته بود، آن را از متن حذف می‌کنیم
+    for link in available_links:
+        if link in text:
+            # حذف مارک‌داون‌های احتمالی مثل [متن](لینک)
+            text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
+            # حذف لینک خام
+            text = text.replace(link, '')
+    
+    # پاکسازی پرانتزها و کروشه‌های خالی که ممکن است مانده باشد
+    text = text.replace('[]', '').replace('()', '').strip()
+    
+    # اضافه کردن لینک استاندارد HTML به انتهای متن
+    if available_links:
+        chosen_link = available_links[0] # اولین لینک موجود در لیست خبرها
+        text += f'\n\n<a href="{chosen_link}">📚 منبع خبر</a>'
+        
     return text
 
 def clean_html(text):
@@ -184,8 +195,19 @@ if __name__ == "__main__":
         if news_list:
             post_text = generate_engaging_post(news_list)
             if post_text and "SKIP" not in post_text.upper():
-                if send_to_telegram(post_text):
-                    posted_url = extract_url_from_text(post_text)
+                # لیست لینک‌های اخبار را استخراج می‌کنیم
+                available_links = [news['link'] for news in news_list]
+                
+                # متن را فرمت‌بندی و لینک را اضافه می‌کنیم
+                final_text = format_post_for_telegram(post_text, available_links)
+                
+                if send_to_telegram(final_text):
+                    # لینکی که واقعاً پست شده را پیدا و ذخیره می‌کنیم
+                    posted_url = None
+                    for link in available_links:
+                        if link in final_text:
+                            posted_url = link
+                            break
                     if posted_url:
                         save_posted_url(posted_url, get_posted_history())
             else:
@@ -194,7 +216,6 @@ if __name__ == "__main__":
             print("🔴 هیچ خبر تازه‌ای در ۲۴ ساعت گذشته یافت نشد. ربات کانال را آپدیت نمی‌کند.")
             
     except Exception as e:
-        # اگر هر خطای پیش‌بینی نشده‌ای در کل کد رخ داد
         error_msg = traceback.format_exc()
         print(f"❌ خطای بحرانی:\n{error_msg}")
         notify_admin(f"خطای بحرانی در اجرای ربات:\n{error_msg}")
