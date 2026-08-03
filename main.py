@@ -10,7 +10,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # تنظیم هوش مصنوعی
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 def get_latest_ai_news():
     print("در حال دریافت اخبار از TechCrunch...")
