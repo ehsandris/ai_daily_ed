@@ -15,12 +15,16 @@ ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
 HISTORY_FILE = 'posted_history.json'
+MODE = os.environ.get("MODE", "DAILY") # حالت پیش‌فرض روزانه است
 
+# منابع خبری (افزودن MIT و Hugging Face)
 NEWS_SOURCES = {
     "TechCrunch": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
     "VentureBeat": "https://venturebeat.com/category/ai/feed/",
     "Wired": "https://www.wired.com/feed/tag/ai/latest/rss",
+    "MIT Tech Review": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
+    "Hugging Face": "https://huggingface.co/blog/feed.xml",
     "Zoomit": "https://www.zoomit.ir/rss",
     "Digiato": "https://www.digiato.com/feed/"
 }
@@ -69,12 +73,14 @@ def is_fresh_news(entry):
     pub_date_struct = entry.get('published_parsed')
     if pub_date_struct:
         pub_date = datetime.fromtimestamp(time.mktime(pub_date_struct))
-        if datetime.now() - pub_date > timedelta(hours=24):
+        # اگر هفتگی بود ۷ روز (168 ساعت)، اگر روزانه بود ۲۴ ساعت
+        hours = 168 if MODE == "WEEKLY" else 24
+        if datetime.now() - pub_date > timedelta(hours=hours):
             return False
     return True
 
 def get_latest_ai_news():
-    print("در حال دریافت اخبار جدید (فقط آخرین ۲۴ ساعت)...")
+    print(f"در حال دریافت اخبار جدید (حالت: {MODE})...")
     posted_urls = get_posted_history()
         
     all_news = []
@@ -104,13 +110,16 @@ def get_latest_ai_news():
                 "summary": summary
             })
             
-    return all_news[:15]
+    limit = 25 if MODE == "WEEKLY" else 15
+    return all_news[:limit]
 
 def load_prompt():
     try:
-        with open('prompt.txt', 'r', encoding='utf-8') as file:
+        prompt_file = 'weekly_prompt.txt' if MODE == "WEEKLY" else 'prompt.txt'
+        with open(prompt_file, 'r', encoding='utf-8') as file:
             return file.read()
     except FileNotFoundError:
+        print(f"❌ فایل {prompt_file} پیدا نشد!")
         return None
 
 def generate_engaging_post(news_list):
@@ -191,7 +200,7 @@ def send_to_telegram(text):
         "disable_web_page_preview": False
     }
     try:
-        response = requests.post(url, data=payload, timeout=15)
+        response = requests.post(url, data=payload, timeout=30)
         if response.status_code == 200:
             print("✅ پست حرفه‌ای با موفقیت ارسال شد!")
             return True
@@ -210,16 +219,20 @@ if __name__ == "__main__":
         if news_list:
             post_text = generate_engaging_post(news_list)
             if post_text and "SKIP" not in post_text.upper():
-                available_links = [news['link'] for news in news_list]
-                final_text, chosen_link = format_post_for_telegram(post_text, available_links)
-                
-                if send_to_telegram(final_text):
-                    if chosen_link:
-                        save_posted_url(chosen_link, get_posted_history())
+                if MODE == "WEEKLY":
+                    # در حالت هفتگی، متن توسط خود هوش مصنوعی فرمت شده است
+                    send_to_telegram(post_text)
+                else:
+                    # در حالت روزانه، لینک و تیتر توسط کد فرمت می‌شود
+                    available_links = [news['link'] for news in news_list]
+                    final_text, chosen_link = format_post_for_telegram(post_text, available_links)
+                    if send_to_telegram(final_text):
+                        if chosen_link:
+                            save_posted_url(chosen_link, get_posted_history())
             else:
                 print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
         else:
-            print("🔴 هیچ خبر تازه‌ای در ۲۴ ساعت گذشته یافت نشد. ربات کانال را آپدیت نمی‌کند.")
+            print("🔴 هیچ خبر تازه‌ای یافت نشد. ربات کانال را آپدیت نمی‌کند.")
             
     except Exception as e:
         error_msg = traceback.format_exc()
