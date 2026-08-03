@@ -20,7 +20,9 @@ NEWS_SOURCES = {
     "TechCrunch": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
     "VentureBeat": "https://venturebeat.com/category/ai/feed/",
-    "Wired": "https://www.wired.com/feed/tag/ai/latest/rss"
+    "Wired": "https://www.wired.com/feed/tag/ai/latest/rss",
+    "Zoomit": "https://www.zoomit.ir/rss",
+    "Digiato": "https://www.digiato.com/feed/"
 }
 
 def notify_admin(error_text):
@@ -101,7 +103,10 @@ def clean_html(text):
     return re.sub(clean, '', text).strip()
 
 def is_valid_news(title):
-    junk_keywords = ['podcast', 'newsletter', 'sponsored', 'giveaway', 'best of', 'deals']
+    junk_keywords = [
+        'podcast', 'newsletter', 'sponsored', 'giveaway', 'best of', 'deals',
+        'پادکست', 'خبرنامه', 'اسپانسر', 'آموزش', 'راهنمای خرید', 'معرفی گوشی', 'تخفیف'
+    ]
     title_lower = title.lower()
     return not any(keyword in title_lower for keyword in junk_keywords)
 
