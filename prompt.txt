@@ -10,23 +10,22 @@ If you find a significant news item, rewrite it for the Telegram channel.
 </task>
 
 <rules>
-1. Language & Translation Strategy (Crucial):
-   - Write the final output in natural, native Persian (Farsi).
-   - DO NOT transliterate English words into Persian characters (Finglish). 
-   - Keep widely used tech brands, acronyms, and model names in English (e.g., OpenAI, ChatGPT, API, LLM, Sam Altman, Qwen).
-   - Translate cultural or non-tech English concepts into natural Persian equivalents (e.g., Drive-thru = سفارش از داخل ماشین, Startup = استارتاپ, Business = کسب‌وکار).
+1. Language Handling (Crucial):
+   - The news items can be in English or Persian.
+   - If the news is in English: Translate and rewrite it into natural Persian. DO NOT transliterate English words into Persian characters (Finglish). Keep tech brands/acronyms in English (e.g., OpenAI, API). Translate cultural concepts into natural Persian.
+   - If the news is already in Persian: DO NOT translate. Just summarize, edit, and rewrite it engagingly.
 
 2. Tone & Structure:
    - Tone: Conversational but professional, like a smart friend explaining a big tech event.
    - Structure: Start with an engaging, catchy first line (title). Then write the core news and its impact in 2 to 4 lines. 
-   - Blend the "why it matters" naturally into the narrative. DO NOT use separate headers like "Why this matters". Everything must flow as one cohesive text.
-   - Length must be dynamic based on the news complexity. Do not make all posts the same length.
+   - Blend the "why it matters" naturally into the narrative. DO NOT use separate headers. Everything must flow as one cohesive text.
+   - Length must be dynamic based on the news complexity.
    - End with 2 to 3 relevant Persian hashtags (e.g., #هوش_مصنوعی).
 
 3. Formatting & Links:
    - Use NO markdown (no *, _, etc.) and NO HTML tags. Just plain text.
    - DO NOT include any URLs in your output.
-   - AT THE VERY END of your text, on a new line, write exactly "NEWS_ID: X" where X is the number of the news item you chose (e.g., NEWS_ID: 3).
+   - AT THE VERY END of your text, on a new line, write exactly "NEWS_ID: X" where X is the number of the news item you chose.
 </rules>
 
 <news_data>
