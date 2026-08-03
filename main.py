@@ -26,7 +26,6 @@ NEWS_SOURCES = {
 }
 
 def notify_admin(error_text):
-    """ارسال پیام خطا به ادمین"""
     if not ADMIN_CHAT_ID:
         return
     print("📧 در حال ارسال پیام خطا به ادمین...")
@@ -53,50 +52,6 @@ def save_posted_url(url, history_set):
     history_list = list(history_set)
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history_list, f)
-
-def extract_url_from_text(text):
-    urls = re.findall(r'(https?://[^\s]+)', text)
-    return urls[-1] if urls else None
-    
-def format_post_for_telegram(text, available_links):
-    """پاک‌سازی متن، پیدا کردن لینک از طریق ID و اضافه کردن دقیق لینک HTML"""
-    
-    chosen_link = None
-    text = text.strip()
-    
-    # پیدا کردن شماره خبری که هوش مصنوعی انتخاب کرده (مثلا NEWS_ID: 3)
-    id_match = re.search(r'NEWS_ID:\s*(\d+)', text)
-    if id_match:
-        news_id = int(id_match.group(1))
-        # ایندکس‌ها از ۰ شروع میشوند، اما اخبار از 1
-        if 0 < news_id <= len(available_links):
-            chosen_link = available_links[news_id - 1]
-            
-    # حذف خط NEWS_ID از متن
-    text = re.sub(r'NEWS_ID:\s*\d+', '', text).strip()
-    
-    # پاکسازی هرگونه لینک خامی که هوش مصنوعی ممکن است اشتباها نوشته باشد
-    for link in available_links:
-        text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
-        text = text.replace(link, '')
-    
-    # پاکسازی پرانتزها و کروشه‌های خالی
-    text = text.replace('[]', '').replace('()', '').strip()
-    
-    # جدا کردن خط اول (تیتر) برای بولد کردن
-    lines = text.split('\n')
-    if len(lines) > 1:
-        title = lines[0].strip()
-        rest_of_text = '\n'.join(lines[1:]).strip()
-        text = f"<b>{title}</b>\n\n{rest_of_text}"
-    
-    # اضافه کردن لینک استاندارد HTML به انتهای متن
-    if chosen_link:
-        text += f'\n\n<a href="{chosen_link}">📚 منبع خبر</a>'
-    else:
-        print("⚠️ هشدار: هوش مصنوعی NEWS_ID ارسال نکرد!")
-        
-    return text, chosen_link
 
 def clean_html(text):
     clean = re.compile('<.*?>')
@@ -187,13 +142,51 @@ def generate_engaging_post(news_list):
         notify_admin(f"خطا در اتصال به هوش مصنوعی:\n{e}")
         return None
 
+def format_post_for_telegram(text, available_links):
+    """پاک‌سازی متن، بولد کردن خط اول و اضافه کردن دقیق لینک HTML"""
+    
+    chosen_link = None
+    text = text.strip()
+    
+    # پیدا کردن شماره خبری که هوش مصنوعی انتخاب کرده (مثلا NEWS_ID: 3)
+    id_match = re.search(r'NEWS_ID:\s*(\d+)', text)
+    if id_match:
+        news_id = int(id_match.group(1))
+        if 0 < news_id <= len(available_links):
+            chosen_link = available_links[news_id - 1]
+            
+    # حذف خط NEWS_ID از متن
+    text = re.sub(r'NEWS_ID:\s*\d+', '', text).strip()
+    
+    # پاکسازی هرگونه لینک خامی که هوش مصنوعی ممکن است اشتباها نوشته باشد
+    for link in available_links:
+        text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
+        text = text.replace(link, '')
+    
+    # پاکسازی پرانتزها و کروشه‌های خالی
+    text = text.replace('[]', '').replace('()', '').strip()
+    
+    # جدا کردن خط اول (تیتر) برای بولد کردن
+    lines = text.split('\n')
+    if len(lines) > 1:
+        title = lines[0].strip()
+        rest_of_text = '\n'.join(lines[1:]).strip()
+        text = f"<b>{title}</b>\n\n{rest_of_text}"
+    
+    # اضافه کردن لینک استاندارد HTML به انتهای متن
+    if chosen_link:
+        text += f'\n\n<a href="{chosen_link}">📚 منبع خبر</a>'
+    else:
+        print("⚠️ هشدار: هوش مصنوعی NEWS_ID ارسال نکرد!")
+        
+    return text, chosen_link
+
 def send_to_telegram(text):
     print("در حال ارسال به تلگرام...")
-    # متن از قبل در تابع format_post_for_telegram فرمت شده است
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_ID,
-        "text": text, # <--- مستقیم خود text را می‌فرستیم
+        "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": False
     }
@@ -218,12 +211,9 @@ if __name__ == "__main__":
             post_text = generate_engaging_post(news_list)
             if post_text and "SKIP" not in post_text.upper():
                 available_links = [news['link'] for news in news_list]
-                
-                # تابع جدید حالا دو خروجی دارد: متن نهایی و لینک انتخاب شده
                 final_text, chosen_link = format_post_for_telegram(post_text, available_links)
                 
                 if send_to_telegram(final_text):
-                    # ذخیره لینک دقیقی که هوش مصنوعی انتخاب کرده بود
                     if chosen_link:
                         save_posted_url(chosen_link, get_posted_history())
             else:
