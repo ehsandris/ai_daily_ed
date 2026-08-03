@@ -1,16 +1,13 @@
 import os
 import requests
 import feedparser
-import google.generativeai as genai
 
 # خواندن متغیرها از گیت‌هاب
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-# تنظیم هوش مصنوعی
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-pro')
+AI_API_URL = os.environ.get("AI_API_URL")
+AI_API_KEY = os.environ.get("AI_API_KEY")
+AI_MODEL = os.environ.get("AI_MODEL")
 
 def get_latest_ai_news():
     print("در حال دریافت اخبار از TechCrunch...")
@@ -22,7 +19,8 @@ def get_latest_ai_news():
     return feed.entries[0]
 
 def translate_to_persian(title, link):
-    print("در حال ترجمه و خلاصه‌سازی توسط Gemini...")
+    print(f"در حال ترجمه توسط مدل {AI_MODEL}...")
+    
     prompt = f"""
     شما یک ویراستار اخبار فناوری هستید. خبر زیر را به فارسی روان، جذاب و خلاصه (حداکثر در ۳ خط) ترجمه و بازنویسی کنید.
     عنوان خبر را در خط اول بنویسید.
@@ -31,11 +29,31 @@ def translate_to_persian(title, link):
     عنوان انگلیسی: {title}
     لینک: {link}
     """
+    
+    headers = {
+        "Authorization": f"Bearer {AI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": AI_MODEL,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "stream": False
+    }
+    
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        response = requests.post(AI_API_URL, json=payload, headers=headers, timeout=30)
+        if response.status_code == 200:
+            # استخراج متن از پاسخ استاندارد
+            data = response.json()
+            return data['choices'][0]['message']['content']
+        else:
+            print(f"❌ خطا از سرور AI: {response.status_code} - {response.text}")
+            return f"🆕 {title}\n\n🔗 {link}"
     except Exception as e:
-        print(f"❌ خطا در هوش مصنوعی: {e}")
+        print(f"❌ خطای شبکه به AI: {e}")
         return f"🆕 {title}\n\n🔗 {link}"
 
 def send_to_telegram(text):
@@ -52,9 +70,9 @@ def send_to_telegram(text):
         if response.status_code == 200:
             print("✅ پیام با موفقیت ارسال شد!")
         else:
-            print(f"❌ خطا: {response.text}")
+            print(f"❌ خطا در ارسال تلگرام: {response.text}")
     except Exception as e:
-        print(f"❌ خطای شبکه: {e}")
+        print(f"❌ خطای شبکه تلگرام: {e}")
 
 if __name__ == "__main__":
     news = get_latest_ai_news()
