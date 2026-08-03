@@ -1,11 +1,11 @@
 import os
 import requests
 import feedparser
+from ollama import Client
 
 # خواندن متغیرها از گیت‌هاب
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
-AI_API_URL = os.environ.get("AI_API_URL")
 AI_API_KEY = os.environ.get("AI_API_KEY")
 AI_MODEL = os.environ.get("AI_MODEL")
 
@@ -30,30 +30,24 @@ def translate_to_persian(title, link):
     لینک: {link}
     """
     
-    headers = {
-        "Authorization": f"Bearer {AI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": AI_MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "stream": False
-    }
-    
     try:
-        response = requests.post(AI_API_URL, json=payload, headers=headers, timeout=30)
-        if response.status_code == 200:
-            # استخراج متن از پاسخ استاندارد
-            data = response.json()
-            return data['choices'][0]['message']['content']
-        else:
-            print(f"❌ خطا از سرور AI: {response.status_code} - {response.text}")
-            return f"🆕 {title}\n\n🔗 {link}"
+        # تنظیم کلاینت اولاما برای اتصال به کلاد
+        client = Client(
+            host='https://ollama.com/api',
+            headers={'Authorization': f'Bearer {AI_API_KEY}'}
+        )
+        
+        # ارسال درخواست به مدل
+        response = client.chat(
+            model=AI_MODEL,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        
+        # گرفتن متن خروجی
+        return response['message']['content']
+        
     except Exception as e:
-        print(f"❌ خطای شبکه به AI: {e}")
+        print(f"❌ خطا در هوش مصنوعی: {e}")
         return f"🆕 {title}\n\n🔗 {link}"
 
 def send_to_telegram(text):
