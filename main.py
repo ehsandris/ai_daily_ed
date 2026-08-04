@@ -144,7 +144,21 @@ def generate_engaging_post(news_list):
             model=AI_MODEL,
             messages=[{'role': 'user', 'content': final_prompt}]
         )
-        return response['message']['content']
+        raw_output = response['message']['content']
+        
+        # 🎯 استخراج تصمیم هوش مصنوعی و ثبت در لاگ
+        decision_match = re.search(r'<decision>(.*?)</decision>', raw_output, re.DOTALL)
+        if decision_match:
+            decision_text = decision_match.group(1).strip()
+            print(f"🧠 تصمیم هوش مصنوعی: {decision_text}")
+            
+            # پاک کردن تگ تصمیم از متن نهایی
+            final_text = raw_output.replace(decision_match.group(0), '').strip()
+            return final_text
+        else:
+            # اگر هوش مصنوعی تگ را نزد، همان متن خام را برمی‌گردانیم
+            print("⚠️ هشدار: هوش مصنوعی تگ <decision> را ارسال نکرد!")
+            return raw_output
         
     except Exception as e:
         print(f"❌ خطا در هوش مصنوعی: {e}")
