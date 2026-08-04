@@ -131,7 +131,7 @@ def generate_engaging_post(news_list):
     
     prompt_template = load_prompt()
     if not prompt_template:
-        return None
+        return None, None
         
     final_prompt = prompt_template.replace("{NEWS_DATA}", news_data)
     
@@ -146,42 +146,42 @@ def generate_engaging_post(news_list):
         )
         raw_output = response['message']['content']
         
-        # 🎯 استخراج تصمیم هوش مصنوعی و ثبت در لاگ
+        # 🎯 استخراج شماره خبر از تگ تصمیم
+        chosen_news_id = None
         decision_match = re.search(r'<decision>(.*?)</decision>', raw_output, re.DOTALL)
         if decision_match:
             decision_text = decision_match.group(1).strip()
             print(f"🧠 تصمیم هوش مصنوعی: {decision_text}")
             
-            # پاک کردن تگ تصمیم از متن نهایی
-            final_text = raw_output.replace(decision_match.group(0), '').strip()
-            return final_text
+            id_match = re.search(r'NEWS_ID:\s*(\d+)', decision_text)
+            if id_match:
+                chosen_news_id = int(id_match.group(1))
+        
+        # 🎯 استخراج متن نهایی از تگ پست
+        post_match = re.search(r'<post>(.*?)</post>', raw_output, re.DOTALL)
+        if post_match:
+            final_text = post_match.group(1).strip()
+            return final_text, chosen_news_id
         else:
-            # اگر هوش مصنوعی تگ را نزد، همان متن خام را برمی‌گردانیم
-            print("⚠️ هشدار: هوش مصنوعی تگ <decision> را ارسال نکرد!")
-            return raw_output
+            print("⚠️ هشدار: هوش مصنوعی تگ <post> را ارسال نکرد!")
+            return raw_output, chosen_news_id
         
     except Exception as e:
         print(f"❌ خطا در هوش مصنوعی: {e}")
         notify_admin(f"خطا در اتصال به هوش مصنوعی:\n{e}")
-        return None
+        return None, None
 
-def format_post_for_telegram(text, available_links):
+def format_post_for_telegram(text, available_links, chosen_news_id=None):
     """پاک‌سازی متن، بولد کردن خط اول و اضافه کردن دقیق لینک HTML"""
     
     chosen_link = None
     text = text.strip()
     
-    # پیدا کردن شماره خبری که هوش مصنوعی انتخاب کرده (مثلا NEWS_ID: 3)
-    id_match = re.search(r'NEWS_ID:\s*(\d+)', text)
-    if id_match:
-        news_id = int(id_match.group(1))
-        if 0 < news_id <= len(available_links):
-            chosen_link = available_links[news_id - 1]
+    # پیدا کردن لینک خبر از طریق ID استخراج شده
+    if chosen_news_id and 0 < chosen_news_id <= len(available_links):
+        chosen_link = available_links[chosen_news_id - 1]
             
-    # حذف خط NEWS_ID از متن
-    text = re.sub(r'NEWS_ID:\s*\d+', '', text).strip()
-    
-    # پاکسازی هرگونه لینک خامی که هوش مصنوعی ممکن است اشتباها نوشته باشد
+    # پاکسازی هرگونه لینک خامی که هوش مصنوعی ممکن است نوشته باشد
     for link in available_links:
         text = re.sub(r'\[.*?\]\(' + re.escape(link) + r'\)', '', text)
         text = text.replace(link, '')
@@ -200,7 +200,7 @@ def format_post_for_telegram(text, available_links):
     if chosen_link:
         text += f'\n\n<a href="{chosen_link}">📚 منبع خبر</a>'
     else:
-        print("⚠️ هشدار: هوش مصنوعی NEWS_ID ارسال نکرد!")
+        print("⚠️ هشدار: لینک خبر پیدا نشد!")
         
     return text, chosen_link
 
@@ -231,18 +231,14 @@ if __name__ == "__main__":
     try:
         news_list = get_latest_ai_news()
         if news_list:
-            post_text = generate_engaging_post(news_list)
+            post_text, chosen_news_id = generate_engaging_post(news_list)
             if post_text and "SKIP" not in post_text.upper():
-                if MODE == "WEEKLY":
-                    # در حالت هفتگی، متن توسط خود هوش مصنوعی فرمت شده است
-                    send_to_telegram(post_text)
-                else:
-                    # در حالت روزانه، لینک و تیتر توسط کد فرمت می‌شود
-                    available_links = [news['link'] for news in news_list]
-                    final_text, chosen_link = format_post_for_telegram(post_text, available_links)
-                    if send_to_telegram(final_text):
-                        if chosen_link:
-                            save_posted_url(chosen_link, get_posted_history())
+                available_links = [news['link'] for news in news_list]
+                final_text, chosen_link = format_post_for_telegram(post_text, available_links, chosen_news_id)
+                
+                if send_to_telegram(final_text):
+                    if chosen_link:
+                        save_posted_url(chosen_link, get_posted_history())
             else:
                 print("🟡 خبر مهمی یافت نشد. ربات چیزی پست نکرد.")
         else:
