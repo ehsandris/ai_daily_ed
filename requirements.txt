@@ -1,0 +1,8 @@
+# Pinned to the exact versions this codebase was tested against.
+# Bump deliberately and re-test before pushing.
+requests==2.32.3
+feedparser==6.0.11
+ollama==0.4.4
+# portalocker is optional: the bot falls back to a no-op lock when it
+# is missing (safe on GitHub Actions runners, where fcntl is available).
+portalocker==3.0.0
