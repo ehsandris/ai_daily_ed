@@ -1,0 +1,33 @@
+# Keep-history workflow alive — GitHub pauses scheduled workflows after
+# ~60 days of repo inactivity. This job runs monthly and touches nothing,
+# just enough to keep the schedules active.
+name: Keep Alive
+
+on:
+  schedule:
+    # 1st of each month at 03:00 UTC.
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Touch README
+        # Update the marker timestamp; this is a no-content commit that
+        # keeps GitHub from disabling the scheduled workflows.
+        run: |
+          date -u +"%Y-%m-%d %H:%M:%S UTC" > .keepalive
+          git config user.name  "ai-news-bot"
+          git config user.email "ai-news-bot@users.noreply.github.com"
+          git add .keepalive
+          git diff --cached --quiet || (git commit -m "chore: keepalive ping [skip ci]" && git push)

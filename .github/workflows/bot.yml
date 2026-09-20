@@ -1,9 +1,25 @@
-name: AI News Bot
+name: AI News Bot (Daily)
 
 on:
   schedule:
-    - cron: "5,35 * * * *"
+    # Hourly: at minute 5 (5 minutes past the hour, every hour)
+    # This is the daily bot — runs every hour.
+    - cron: "5 * * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Bot mode"
+        required: false
+        type: choice
+        default: DAILY
+        options:
+          - DAILY
+          - WEEKLY
+
+# Prevent overlapping runs (history file is shared across runs).
+concurrency:
+  group: bot-history
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,19 +27,28 @@ permissions:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 10
+    env:
+      MODE: ${{ inputs.mode || 'DAILY' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+        with:
+          # Need full history so posted_history.json commits can push back.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+          cache: pip
+
       - name: Install dependencies
-        run: pip install requests feedparser ollama
-        
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run Bot
         run: python main.py
         env:
@@ -34,10 +59,17 @@ jobs:
           AI_MODEL: ${{ secrets.AI_MODEL }}
 
       - name: Save Memory to GitHub
+        # Only commit when the file actually changed (the bot updates it
+        # only when a new post was made).
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add posted_history.json
-          git commit -m "Update posted history" || echo "No changes to commit"
-          git pull --rebase origin main
-          git push
+          if [[ -n "$(git status --porcelain posted_history.json)" ]]; then
+            git commit -m "chore(history): auto-update posted URLs [skip ci]"
+            # --force-with-lease: safe force-push in case a concurrent run
+            # pushed first; the lease will fail loudly if main moved on.
+            git push --force-with-lease
+          else
+            echo "No history changes to commit."
+          fi
